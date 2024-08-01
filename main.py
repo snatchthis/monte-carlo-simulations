@@ -9,13 +9,12 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 
 class MonteCarloForecast:
-    def __init__(self, daily_tasks, num_simulations):
+    def __init__(self, daily_tasks):
         self.daily_tasks = daily_tasks
-        self.num_simulations = num_simulations
 
-    def run_simulation(self, forecast_days):
+    def run_simulation(self, forecast_days, num_simulations):
         simulations = []
-        for _ in range(self.num_simulations):
+        for _ in range(num_simulations):
             total_tasks = 0
             for _ in range(forecast_days):
                 tasks = np.random.choice(self.daily_tasks)
@@ -63,8 +62,9 @@ def load_data():
 def run_simulation():
     try:
         forecast_days = int(forecast_days_var.get())
-        forecast = MonteCarloForecast(daily_task_counts, num_simulations)
-        simulations = forecast.run_simulation(forecast_days)
+        num_simulations = int(num_simulations_var.get())
+        forecast = MonteCarloForecast(daily_task_counts)
+        simulations = forecast.run_simulation(forecast_days, num_simulations)
         stats = forecast.generate_statistics(simulations)
         plot = forecast.plot_results(simulations)
 
@@ -81,12 +81,11 @@ def run_simulation():
         canvas.draw()
         canvas.get_tk_widget().pack()
     except ValueError:
-        messagebox.showerror("Input Error", "Please enter a valid number of days.")
+        messagebox.showerror("Input Error", "Please enter valid numbers for the parameters.")
 
 
 # Load the data
 daily_task_counts = load_data()
-num_simulations = 10000
 
 # Create the main window
 root = Tk()
@@ -99,7 +98,12 @@ input_frame.pack(pady=10)
 Label(input_frame, text="Enter the number of days for the forecast period:").grid(row=0, column=0, padx=10)
 forecast_days_var = StringVar()
 Entry(input_frame, textvariable=forecast_days_var).grid(row=0, column=1, padx=10)
-Button(input_frame, text="Run Simulation", command=run_simulation).grid(row=0, column=2, padx=10)
+
+Label(input_frame, text="Enter the number of simulations:").grid(row=1, column=0, padx=10)
+num_simulations_var = StringVar()
+Entry(input_frame, textvariable=num_simulations_var).grid(row=1, column=1, padx=10)
+
+Button(input_frame, text="Run Simulation", command=run_simulation).grid(row=2, columnspan=2, pady=10)
 
 # Results frame
 results_frame = Frame(root)
