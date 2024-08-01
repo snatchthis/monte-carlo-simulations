@@ -1,16 +1,22 @@
+import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
 class MonteCarloForecast:
-    def __init__(self, data, sprint_length, num_simulations):
-        self.data = data
-        self.sprint_length = sprint_length
+    def __init__(self, daily_tasks, forecast_days, num_simulations):
+        self.daily_tasks = daily_tasks
+        self.forecast_days = forecast_days
         self.num_simulations = num_simulations
 
     def run_simulation(self):
         simulations = []
         for _ in range(self.num_simulations):
-            simulations.append(np.sum(np.random.choice(self.data, self.sprint_length)))
+            total_tasks = 0
+            for _ in range(self.forecast_days):
+                # Randomly select a number of tasks completed in a day from historical data
+                tasks = np.random.choice(self.daily_tasks)
+                total_tasks += tasks
+            simulations.append(total_tasks)
         return simulations
 
     def generate_statistics(self, simulations):
@@ -32,14 +38,39 @@ class MonteCarloForecast:
         plt.ylabel('Frequency')
         plt.show()
 
-# Sample data for testing purposes
-data = [10, 12, 9, 11, 15, 14, 13, 12, 10, 11]
-sprint_length = 3  # 3 weeks
+# Load the data
+file_path = 'history.csv'
+data = pd.read_csv(file_path)
+
+# Convert the 'Resolved' column to datetime format
+data['Resolved'] = pd.to_datetime(data['Resolved'], format='%d.%m.%y %H:%M')
+
+# Generate the full range of dates
+date_range = pd.date_range(start=data['Resolved'].min(), end=data['Resolved'].max())
+
+# Create a DataFrame for the full date range
+full_date_range_df = pd.DataFrame(date_range, columns=['Date'])
+
+# Count the number of tasks completed each day
+daily_task_counts = data['Resolved'].dt.floor('d').value_counts().reset_index()
+daily_task_counts.columns = ['Date', 'Task_Count']
+
+# Ensure the Date columns are of the same type
+full_date_range_df['Date'] = full_date_range_df['Date'].dt.date
+daily_task_counts['Date'] = daily_task_counts['Date'].dt.date
+
+# Merge with the full date range DataFrame and fill missing values with 0
+daily_task_counts = pd.merge(full_date_range_df, daily_task_counts, on='Date', how='left').fillna(0)
+daily_task_counts = daily_task_counts['Task_Count'].values
+
+# Monte Carlo simulation parameters
+forecast_days = 21  # Example: Forecast for 45 days
 num_simulations = 10000
 
-forecast = MonteCarloForecast(data, sprint_length, num_simulations)
+# Create forecast object
+forecast = MonteCarloForecast(daily_task_counts, forecast_days, num_simulations)
 simulations = forecast.run_simulation()
 stats = forecast.generate_statistics(simulations)
 forecast.plot_results(simulations)
 
-print("Forecast Statistics:", stats)
+stats
