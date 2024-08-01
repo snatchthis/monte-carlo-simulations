@@ -1,10 +1,9 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import io
-import base64
-from tkinter import Tk, Label, Entry, Button, StringVar, Frame
+from tkinter import Tk, Label, Entry, Button, StringVar, Frame, OptionMenu
 from tkinter import messagebox
+from tkcalendar import DateEntry
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 
@@ -12,12 +11,17 @@ class MonteCarloForecast:
     def __init__(self, daily_tasks):
         self.daily_tasks = daily_tasks
 
-    def run_simulation(self, forecast_days, num_simulations):
+    def run_simulation(self, forecast_days, num_simulations, distribution_model):
         simulations = []
         for _ in range(num_simulations):
             total_tasks = 0
             for _ in range(forecast_days):
-                tasks = np.random.choice(self.daily_tasks)
+                if distribution_model == 'Normal':
+                    tasks = max(0, np.random.normal(np.mean(self.daily_tasks), np.std(self.daily_tasks)))
+                elif distribution_model == 'Poisson':
+                    tasks = np.random.poisson(np.mean(self.daily_tasks))
+                else:  # Uniform
+                    tasks = np.random.choice(self.daily_tasks)
                 total_tasks += tasks
             simulations.append(total_tasks)
         return simulations
@@ -43,17 +47,18 @@ class MonteCarloForecast:
         return plt
 
 
-def load_data():
+def load_data(start_date, end_date):
     # Load and prepare data
     file_path = 'history.csv'  # Ensure the CSV file is in the same directory
     data = pd.read_csv(file_path)
-    data['Resolved'] = pd.to_datetime(data['Resolved'], format='%d.%m.%y %H:%M')
+    data['Resolved'] = pd.to_datetime(data['Resolved'], format='%d.%m.%y %H:%M').dt.date
+    data = data[(data['Resolved'] >= start_date) & (data['Resolved'] <= end_date)]
     date_range = pd.date_range(start=data['Resolved'].min(), end=data['Resolved'].max())
     full_date_range_df = pd.DataFrame(date_range, columns=['Date'])
-    daily_task_counts = data['Resolved'].dt.floor('d').value_counts().reset_index()
+    daily_task_counts = data['Resolved'].value_counts().reset_index()
     daily_task_counts.columns = ['Date', 'Task_Count']
     full_date_range_df['Date'] = full_date_range_df['Date'].dt.date
-    daily_task_counts['Date'] = daily_task_counts['Date'].dt.date
+    daily_task_counts['Date'] = daily_task_counts['Date']
     daily_task_counts = pd.merge(full_date_range_df, daily_task_counts, on='Date', how='left').fillna(0)
     daily_task_counts = daily_task_counts['Task_Count'].values
     return daily_task_counts
@@ -63,8 +68,12 @@ def run_simulation():
     try:
         forecast_days = int(forecast_days_var.get())
         num_simulations = int(num_simulations_var.get())
+        start_date = start_date_var.get_date()
+        end_date = end_date_var.get_date()
+        distribution_model = distribution_model_var.get()
+        daily_task_counts = load_data(start_date, end_date)
         forecast = MonteCarloForecast(daily_task_counts)
-        simulations = forecast.run_simulation(forecast_days, num_simulations)
+        simulations = forecast.run_simulation(forecast_days, num_simulations, distribution_model)
         stats = forecast.generate_statistics(simulations)
         plot = forecast.plot_results(simulations)
 
@@ -77,15 +86,14 @@ def run_simulation():
                          f"10th Percentile: {stats['percentiles']['10th']}")
 
         # Display plot
+        for widget in plot_frame.winfo_children():
+            widget.destroy()  # Clear previous plot
         canvas = FigureCanvasTkAgg(plot.gcf(), master=plot_frame)
         canvas.draw()
         canvas.get_tk_widget().pack()
     except ValueError:
         messagebox.showerror("Input Error", "Please enter valid numbers for the parameters.")
 
-
-# Load the data
-daily_task_counts = load_data()
 
 # Create the main window
 root = Tk()
@@ -103,7 +111,20 @@ Label(input_frame, text="Enter the number of simulations:").grid(row=1, column=0
 num_simulations_var = StringVar()
 Entry(input_frame, textvariable=num_simulations_var).grid(row=1, column=1, padx=10)
 
-Button(input_frame, text="Run Simulation", command=run_simulation).grid(row=2, columnspan=2, pady=10)
+Label(input_frame, text="Select the start date for the historical data:").grid(row=2, column=0, padx=10)
+start_date_var = DateEntry(input_frame, date_pattern='yyyy-mm-dd')
+start_date_var.grid(row=2, column=1, padx=10)
+
+Label(input_frame, text="Select the end date for the historical data:").grid(row=3, column=0, padx=10)
+end_date_var = DateEntry(input_frame, date_pattern='yyyy-mm-dd')
+end_date_var.grid(row=3, column=1, padx=10)
+
+Label(input_frame, text="Select the distribution model:").grid(row=4, column=0, padx=10)
+distribution_model_var = StringVar(value="Uniform")
+distribution_model_options = ["Uniform", "Normal", "Poisson"]
+OptionMenu(input_frame, distribution_model_var, *distribution_model_options).grid(row=4, column=1, padx=10)
+
+Button(input_frame, text="Run Simulation", command=run_simulation).grid(row=5, columnspan=2, pady=10)
 
 # Results frame
 results_frame = Frame(root)
