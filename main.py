@@ -1,10 +1,11 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from tkinter import Tk, Label, Entry, Button, StringVar, Frame
+from tkinter import Tk, Label, Entry, Button, StringVar, Frame, ttk
 from tkinter import messagebox
 from tkcalendar import DateEntry
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+import os
 
 class MonteCarloForecast:
     def __init__(self, daily_tasks):
@@ -42,9 +43,8 @@ class MonteCarloForecast:
         plt.tight_layout()
         return plt
 
-def load_data(start_date, end_date):
+def load_data(start_date, end_date, file_path):
     # Load and prepare data
-    file_path = 'history.csv'  # Ensure the CSV file is in the same directory
     data = pd.read_csv(file_path)
     data['Resolved'] = pd.to_datetime(data['Resolved'], format='%d.%m.%y %H:%M').dt.date
     data = data[(data['Resolved'] >= start_date) & (data['Resolved'] <= end_date)]
@@ -64,13 +64,30 @@ def update_date_range(*args):
     num_days = (end_date - start_date).days
     date_range_text.set(f"Number of days between selected dates: {num_days}")
 
+def update_date_range_from_file(*args):
+    file_path = selected_file.get()
+    if file_path:
+        data = pd.read_csv(file_path)
+        data['Resolved'] = pd.to_datetime(data['Resolved'], format='%d.%m.%y %H:%M').dt.date
+        default_start_date = data['Resolved'].min()
+        default_end_date = data['Resolved'].max()
+        start_date_var.set_date(default_start_date)
+        end_date_var.set_date(default_end_date)
+        update_date_range()
+
 def run_simulation():
     try:
         forecast_days = int(forecast_days_var.get())
         num_simulations = int(num_simulations_var.get())
         start_date = start_date_var.get_date()
         end_date = end_date_var.get_date()
-        daily_task_counts = load_data(start_date, end_date)
+        file_path = selected_file.get()
+
+        if not file_path:
+            messagebox.showerror("Input Error", "Please select a CSV file.")
+            return
+
+        daily_task_counts = load_data(start_date, end_date, file_path)
         forecast = MonteCarloForecast(daily_task_counts)
         simulations = forecast.run_simulation(forecast_days, num_simulations)
         stats = forecast.generate_statistics(simulations)
@@ -103,13 +120,6 @@ def run_simulation():
     except ValueError:
         messagebox.showerror("Input Error", "Please enter valid numbers for the parameters.")
 
-# Load the data to get the date range for default values
-file_path = 'history.csv'
-data = pd.read_csv(file_path)
-data['Resolved'] = pd.to_datetime(data['Resolved'], format='%d.%m.%y %H:%M').dt.date
-default_start_date = data['Resolved'].min()
-default_end_date = data['Resolved'].max()
-
 # Create the main window
 root = Tk()
 root.title("Monte Carlo Simulation")
@@ -118,32 +128,33 @@ root.title("Monte Carlo Simulation")
 input_frame = Frame(root)
 input_frame.pack(pady=10)
 
-Label(input_frame, text="Enter the number of days for the forecast period:").grid(row=0, column=0, padx=10)
+# Select CSV file from dropdown
+Label(input_frame, text="Select CSV file from 'history' folder:").grid(row=0, column=0, padx=10)
+selected_file = StringVar()
+csv_files = [f"history/{file}" for file in os.listdir('history') if file.endswith('.csv')]
+file_dropdown = ttk.Combobox(input_frame, textvariable=selected_file, values=csv_files)
+file_dropdown.grid(row=0, column=1, padx=10)
+file_dropdown.bind("<<ComboboxSelected>>", update_date_range_from_file)
+
+Label(input_frame, text="Enter the number of days for the forecast period:").grid(row=1, column=0, padx=10)
 forecast_days_var = StringVar(value="21")
-Entry(input_frame, textvariable=forecast_days_var).grid(row=0, column=1, padx=10)
+Entry(input_frame, textvariable=forecast_days_var).grid(row=1, column=1, padx=10)
 
-Label(input_frame, text="Enter the number of simulations:").grid(row=1, column=0, padx=10)
+Label(input_frame, text="Enter the number of simulations:").grid(row=2, column=0, padx=10)
 num_simulations_var = StringVar(value="10000")
-Entry(input_frame, textvariable=num_simulations_var).grid(row=1, column=1, padx=10)
+Entry(input_frame, textvariable=num_simulations_var).grid(row=2, column=1, padx=10)
 
-Label(input_frame, text="Select the start date for the historical data:").grid(row=2, column=0, padx=10)
-start_date_var = DateEntry(input_frame, date_pattern='yyyy-mm-dd', year=default_start_date.year, month=default_start_date.month, day=default_start_date.day)
-start_date_var.grid(row=2, column=1, padx=10)
+Label(input_frame, text="Select the start date for the historical data:").grid(row=3, column=0, padx=10)
+start_date_var = DateEntry(input_frame, date_pattern='yyyy-mm-dd')
+start_date_var.grid(row=3, column=1, padx=10)
 
-Label(input_frame, text="Select the end date for the historical data:").grid(row=3, column=0, padx=10)
-end_date_var = DateEntry(input_frame, date_pattern='yyyy-mm-dd', year=default_end_date.year, month=default_end_date.month, day=default_end_date.day)
-end_date_var.grid(row=3, column=1, padx=10)
-
-date_range_text = StringVar()
-num_days = (default_end_date - default_start_date).days
-date_range_text.set(f"Number of days between selected dates: {num_days}")
-Label(input_frame, textvariable=date_range_text).grid(row=4, columnspan=2, pady=10)
+Label(input_frame, text="Select the end date for the historical data:").grid(row=4, column=0, padx=10)
+end_date_var = DateEntry(input_frame, date_pattern='yyyy-mm-dd')
+end_date_var.grid(row=4, column=1, padx=10)
 
 Button(input_frame, text="Run Simulation", command=run_simulation).grid(row=5, columnspan=2, pady=10)
 
-# Bind date changes to update_date_range function
-start_date_var.bind("<<DateEntrySelected>>", update_date_range)
-end_date_var.bind("<<DateEntrySelected>>", update_date_range)
+date_range_text = StringVar()
 
 # Results frame
 results_frame = Frame(root)
